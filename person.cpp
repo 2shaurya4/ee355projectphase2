@@ -5,6 +5,25 @@
 #include <sstream>
 #include <algorithm>
 
+static string trim(string value) {
+    string::size_type start = value.find_first_not_of(" \t\r\n");
+    string::size_type end = value.find_last_not_of(" \t\r\n");
+    if (start == string::npos) {
+        return "";
+    }
+    return value.substr(start, end - start + 1);
+}
+
+static void parseContactLine(string line, string& type, string& data) {
+    string::size_type open = line.find('(');
+    string::size_type close = line.find(')');
+    type = trim(line.substr(open + 1, close - open - 1));
+    data = trim(line.substr(close + 1));
+    if (!data.empty() && data[0] == ':') {
+        data = trim(data.substr(1));
+    }
+}
+
 Person::Person() {
     set_person();
 }
@@ -22,18 +41,12 @@ Person::Person(string f_name, string l_name, string b_date, string email_str, st
     this->next = NULL;
     this->prev = NULL;
 
-    // Parse email: "(Type) address"
-    int open = email_str.find('(');
-    int close = email_str.find(')');
-    string eType = email_str.substr(open + 1, close - open - 1);
-    string eAddr = email_str.substr(close + 2);
+    string eType, eAddr;
+    parseContactLine(email_str, eType, eAddr);
     this->email = new Email(eType, eAddr);
 
-    // Parse phone: "(Type) number"
-    open = phone_str.find('(');
-    close = phone_str.find(')');
-    string pType = phone_str.substr(open + 1, close - open - 1);
-    string pNum = phone_str.substr(close + 2);
+    string pType, pNum;
+    parseContactLine(phone_str, pType, pNum);
     this->phone = new Phone(pType, pNum);
 }
 
@@ -85,7 +98,6 @@ void Person::set_person(string filename) {
     getline(file, dateStr);
     birthdate = new Date(dateStr);
 
-    // Read two lines — could be phone then email or email then phone
     string line4, line5;
     getline(file, line4);
     getline(file, line5);
@@ -99,16 +111,12 @@ void Person::set_person(string filename) {
         emailLine = line5;
     }
 
-    int open = phoneLine.find('(');
-    int close = phoneLine.find(')');
-    string pType = phoneLine.substr(open + 1, close - open - 1);
-    string pNum = phoneLine.substr(close + 2);
+    string pType, pNum;
+    parseContactLine(phoneLine, pType, pNum);
     phone = new Phone(pType, pNum);
 
-    open = emailLine.find('(');
-    close = emailLine.find(')');
-    string eType = emailLine.substr(open + 1, close - open - 1);
-    string eAddr = emailLine.substr(close + 2);
+    string eType, eAddr;
+    parseContactLine(emailLine, eType, eAddr);
     email = new Email(eType, eAddr);
 
     file.close();
@@ -129,18 +137,16 @@ void Person::print_person() {
     birthdate->print_date("Month D, YYYY");
     phone->print();
     email->print();
-    // Print friends codes
-    for (int i = 0; i < myfriends.size(); i++) {
+    for (vector<Person*>::size_type i = 0; i < myfriends.size(); i++) {
         string code = codeName(myfriends[i]->f_name, myfriends[i]->l_name);
         cout << code << " (" << myfriends[i]->f_name << " " << myfriends[i]->l_name << ")" << endl;
     }
 }
 
 void Person::makeFriend(Person* newFriend) {
-    // Check if already friends
-    for (int i = 0; i < myfriends.size(); i++) {
+    for (vector<Person*>::size_type i = 0; i < myfriends.size(); i++) {
         if (myfriends[i] == newFriend) {
-            return; // already friends
+            return;
         }
     }
     myfriends.push_back(newFriend);
@@ -150,17 +156,15 @@ void Person::print_friends() {
     cout << l_name << ", " << f_name << endl;
     cout << "--------------------------------" << endl;
 
-    // Build a vector of codes and corresponding indices for sorting
     vector<string> codes;
     vector<int> indices;
-    for (int i = 0; i < myfriends.size(); i++) {
+    for (vector<Person*>::size_type i = 0; i < myfriends.size(); i++) {
         codes.push_back(codeName(myfriends[i]->f_name, myfriends[i]->l_name));
         indices.push_back(i);
     }
 
-    // Sort by first letter, then second letter
-    for (int i = 0; i < indices.size(); i++) {
-        for (int j = i + 1; j < indices.size(); j++) {
+    for (vector<int>::size_type i = 0; i < indices.size(); i++) {
+        for (vector<int>::size_type j = i + 1; j < indices.size(); j++) {
             bool shouldSwap = false;
             if (codes[indices[i]][0] > codes[indices[j]][0]) {
                 shouldSwap = true;
@@ -179,8 +183,7 @@ void Person::print_friends() {
         }
     }
 
-    // Print sorted friends
-    for (int i = 0; i < indices.size(); i++) {
+    for (vector<int>::size_type i = 0; i < indices.size(); i++) {
         Person* f = myfriends[indices[i]];
         cout << f->f_name << ", " << f->l_name << endl;
     }

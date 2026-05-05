@@ -6,6 +6,15 @@
 #include <dirent.h>
 #include <cstring>
 
+static string trim(string value) {
+    string::size_type start = value.find_first_not_of(" \t\r\n");
+    string::size_type end = value.find_last_not_of(" \t\r\n");
+    if (start == string::npos) {
+        return "";
+    }
+    return value.substr(start, end - start + 1);
+}
+
 Network::Network() {
     head = NULL;
     tail = NULL;
@@ -53,17 +62,11 @@ Person* Network::search(string fname, string lname) {
 Person* Network::wiseSearch(string query) {
     Person* ptr = head;
     while (ptr != NULL) {
-        // Check phone number (formatted and raw)
         if (ptr->getPhoneStr() == query) return ptr;
-        // Check email
         if (ptr->getEmailStr() == query) return ptr;
-        // Check date
         if (ptr->getDateStr() == query) return ptr;
-        // Check first name
         if (ptr->getFName() == query) return ptr;
-        // Check last name
         if (ptr->getLName() == query) return ptr;
-        // Check code name
         if (ptr->getCode() == query) return ptr;
         ptr = ptr->next;
     }
@@ -77,7 +80,6 @@ void Network::loadDB(string filename) {
         return;
     }
 
-    // Clear existing list
     Person* current = head;
     while (current != NULL) {
         Person* temp = current;
@@ -88,19 +90,33 @@ void Network::loadDB(string filename) {
     tail = NULL;
     count = 0;
 
-    // First pass: read all people
-    string fname, lname, dateStr, line4, line5, separator;
-    // Store friend code lines for second pass
+    string firstLine, fname, lname, dateStr, line4, line5;
     vector<vector<string> > allFriendCodes;
 
-    while (getline(file, fname)) {
-        if (fname.empty()) continue;
-        if (fname[0] == '-') continue;
+    while (getline(file, firstLine)) {
+        firstLine = trim(firstLine);
+        if (firstLine.empty()) continue;
+        if (firstLine[0] == '-') continue;
 
-        getline(file, lname);
-        getline(file, dateStr);
-        getline(file, line4);
-        getline(file, line5);
+        string::size_type comma = firstLine.find(',');
+        if (comma != string::npos) {
+            lname = trim(firstLine.substr(0, comma));
+            fname = trim(firstLine.substr(comma + 1));
+            getline(file, dateStr);
+            getline(file, line4);
+            getline(file, line5);
+        } else {
+            fname = firstLine;
+            getline(file, lname);
+            getline(file, dateStr);
+            getline(file, line4);
+            getline(file, line5);
+        }
+
+        lname = trim(lname);
+        dateStr = trim(dateStr);
+        line4 = trim(line4);
+        line5 = trim(line5);
 
         string emailLine, phoneLine;
         if (line4.find('@') != string::npos) {
@@ -114,16 +130,15 @@ void Network::loadDB(string filename) {
         Person* p = new Person(fname, lname, dateStr, emailLine, phoneLine);
         push_back(p);
 
-        // Read friend codes until separator or EOF
         vector<string> friendCodes;
         string line;
         while (getline(file, line)) {
+            line = trim(line);
             if (line.empty()) continue;
             if (line[0] == '-') break;
-            // This is a friend code line like "nayanagupta (Nayana Gupta)"
-            // Extract just the code (before the space)
+
             string friendCode = "";
-            for (int i = 0; i < line.length(); i++) {
+            for (string::size_type i = 0; i < line.length(); i++) {
                 if (line[i] == ' ') break;
                 friendCode += line[i];
             }
@@ -134,16 +149,15 @@ void Network::loadDB(string filename) {
 
     file.close();
 
-    // Second pass: link friends using codes
     Person* ptr = head;
-    int idx = 0;
+    vector<vector<string> >::size_type idx = 0;
     while (ptr != NULL && idx < allFriendCodes.size()) {
-        for (int i = 0; i < allFriendCodes[idx].size(); i++) {
-            // Find person with this code
+        for (vector<string>::size_type i = 0; i < allFriendCodes[idx].size(); i++) {
             Person* friendPtr = head;
             while (friendPtr != NULL) {
                 if (friendPtr->getCode() == allFriendCodes[idx][i]) {
                     ptr->makeFriend(friendPtr);
+                    friendPtr->makeFriend(ptr);
                     break;
                 }
                 friendPtr = friendPtr->next;
@@ -163,13 +177,11 @@ void Network::saveDB(string filename) {
 
     Person* ptr = head;
     while (ptr != NULL) {
-        file << ptr->f_name << endl;
-        file << ptr->l_name << endl;
-        file << ptr->birthdate->get_date_str() << endl;
-        file << ptr->phone->get_contact() << endl;
-        file << ptr->email->get_contact() << endl;
-        // Save friend codes
-        for (int i = 0; i < ptr->myfriends.size(); i++) {
+        file << ptr->l_name << ", " << ptr->f_name << endl;
+        file << ptr->birthdate->get_date_str("Month D, YYYY") << endl;
+        file << "Phone " << ptr->phone->get_contact() << endl;
+        file << "Email " << ptr->email->get_contact() << endl;
+        for (vector<Person*>::size_type i = 0; i < ptr->myfriends.size(); i++) {
             string code = codeName(ptr->myfriends[i]->f_name, ptr->myfriends[i]->l_name);
             file << code << " (" << ptr->myfriends[i]->f_name << " " << ptr->myfriends[i]->l_name << ")" << endl;
         }
@@ -221,10 +233,9 @@ bool Network::remove(string fname, string lname) {
     Person* target = search(fname, lname);
     if (target == NULL) return false;
 
-    // Remove target from everyone's friend list
     Person* ptr = head;
     while (ptr != NULL) {
-        for (int i = 0; i < ptr->myfriends.size(); i++) {
+        for (vector<Person*>::size_type i = 0; i < ptr->myfriends.size(); i++) {
             if (ptr->myfriends[i] == target) {
                 ptr->myfriends.erase(ptr->myfriends.begin() + i);
                 break;
@@ -357,7 +368,6 @@ void Network::showMenu() {
         else if (opt == 6) {
             cout << "Make friends: \n";
 
-            // Get person 1
             cout << "Person 1" << endl;
             cout << "First Name: ";
             getline(cin, fname);
@@ -368,7 +378,6 @@ void Network::showMenu() {
             if (p1 == NULL) {
                 cout << "Person not found! \n";
             } else {
-                // Get person 2
                 cout << "Person 2" << endl;
                 cout << "First Name: ";
                 getline(cin, fname);
@@ -379,11 +388,9 @@ void Network::showMenu() {
                 if (p2 == NULL) {
                     cout << "Person not found! \n";
                 } else {
-                    // Make them friends (double sided)
                     p1->makeFriend(p2);
                     p2->makeFriend(p1);
 
-                    // Print both persons
                     cout << endl;
                     p1->print_person();
                     cout << endl;
